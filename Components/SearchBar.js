@@ -2,12 +2,14 @@ import React, { useState, useEffect } from "react";
 import { SafeAreaView, TextInput, StyleSheet, View, Text, TouchableOpacity } from "react-native";
 import airports from "../data/airports.json";
 import AnimatedNumber from "react-native-animated-number";
+import EStyleSheet from "react-native-extended-stylesheet";
 
 const SearchBar = () => {
 
   const [departureValue, setDepartureValue] = useState();
   const [destinationValue, setDestinationValue] = useState();
   const [distance, setDistance] = useState(0);
+  const [closestAirports, setClosestAirports] = useState([]);
 
   const departureAirport = airports.filter(airports => airports.codeIcaoAirport === departureValue);
   const destinationAirport = airports.filter(airports => airports.codeIcaoAirport === destinationValue);
@@ -33,35 +35,36 @@ const SearchBar = () => {
     return R * c; // Distance in NM
   }
 
-  function getDistanceFromLatLonInNM2(airport1, airport2) {
-    function deg2rad(deg) {
-      return deg * (Math.PI / 180);
+  function findAirportsWithinDistance(airport, distance) {
+    function getDistanceFromLatLonInNM2(airport1, airport2) {
+      function deg2rad(deg) {
+        return deg * (Math.PI / 180);
+      }
+
+      const lat1 = airport1[0].latitudeAirport;
+      const lon1 = airport1[0].longitudeAirport;
+      const lat2 = airport2.latitudeAirport;
+      const lon2 = airport2.longitudeAirport;
+
+      const R = 3443.92; // Radius of the earth in NM
+      const dLat = deg2rad(lat2 - lat1);
+      const dLon = deg2rad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c; // Distance in NM
     }
 
-    const lat1 = airport1[0].latitudeAirport;
-    const lon1 = airport1[0].longitudeAirport;
-    const lat2 = airport2.latitudeAirport;
-    const lon2 = airport2.longitudeAirport;
-
-    const R = 3443.92; // Radius of the earth in NM
-    const dLat = deg2rad(lat2 - lat1);
-    const dLon = deg2rad(lon2 - lon1);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c; // Distance in NM
-  }
-
-  function findAirportsWithinDistance(airport, distance) {
     let airportsInRange = [];
     for (let i = 0; i < airports.length; i++) {
       if (getDistanceFromLatLonInNM2(airport, airports[i]) < distance) {
         airportsInRange.push(airports[i]);
       }
+      setClosestAirports(...closestAirports,...[airportsInRange]);
     }
-    console.log(airportsInRange.length);
+
   }
 
 
@@ -70,7 +73,6 @@ const SearchBar = () => {
       destinationAirport.length !== 0 &&
       departureValue.length === 4 &&
       destinationValue.length === 4) {
-      findAirportsWithinDistance(departureAirport, 400);
       setDistance(getDistanceFromLatLonInNM(departureAirport, destinationAirport).toFixed(0));
     }
     if (departureAirport.length === 0 || destinationAirport.length === 0) {
@@ -78,6 +80,15 @@ const SearchBar = () => {
     }
   }, [departureAirport, destinationAirport]);
 
+  useEffect(() => {
+    if (distance !== 0) {
+      findAirportsWithinDistance(departureAirport, 200);
+    }
+  }, [distance]);
+
+  useEffect(()=>{
+    console.log(closestAirports);
+  },[closestAirports])
 
   return <SafeAreaView style={styles.container}>
     <View style={styles.inputContainer}>
@@ -112,7 +123,7 @@ const styles = StyleSheet.create({
     flex: 0.07,
     minHeight: 60,
     justifyContent: "center",
-    borderColor: 'lightblue',
+    borderColor: "lightblue",
     borderWidth: 1,
   },
   inputContainer: {
@@ -123,24 +134,25 @@ const styles = StyleSheet.create({
     paddingRight: 50,
   },
   inputText: {
-    flex: 0.25,
+    width: "30%",
     height: 30,
     fontSize: 20,
-    textAlign: 'center',
+    textAlign: "center",
     padding: 5,
     borderWidth: 1,
     borderRadius: 5,
-    borderColor: 'lightblue',
+    borderColor: "lightblue",
   },
   distanceText: {
-    width: 100,
+    width: "30%",
+    minWidth: 100,
     textAlign: "center",
     fontSize: 16,
     paddingLeft: 5,
     paddingRight: 5,
-    borderWidth:1,
+    borderWidth: 1,
     borderRadius: 5,
-    borderColor: 'lightblue'
+    borderColor: "lightblue",
   },
 });
 
