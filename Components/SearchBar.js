@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { SafeAreaView, TextInput, StyleSheet, View, Text, TouchableOpacity } from "react-native";
 import airports from "../data/airports.json";
+import AnimatedNumber from "react-native-animated-number";
 
 const SearchBar = () => {
 
@@ -11,8 +12,7 @@ const SearchBar = () => {
   const departureAirport = airports.filter(airports => airports.codeIcaoAirport === departureValue);
   const destinationAirport = airports.filter(airports => airports.codeIcaoAirport === destinationValue);
 
-  function getDistanceFromLatLonInKm(airport1, airport2) {
-
+  function getDistanceFromLatLonInNM(airport1, airport2) {
     function deg2rad(deg) {
       return deg * (Math.PI / 180);
     }
@@ -30,18 +30,54 @@ const SearchBar = () => {
       Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
       Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const d = R * c; // Distance in NM
-    return d;
+    return R * c; // Distance in NM
   }
+
+  function getDistanceFromLatLonInNM2(airport1, airport2) {
+    function deg2rad(deg) {
+      return deg * (Math.PI / 180);
+    }
+
+    const lat1 = airport1[0].latitudeAirport;
+    const lon1 = airport1[0].longitudeAirport;
+    const lat2 = airport2.latitudeAirport;
+    const lon2 = airport2.longitudeAirport;
+
+    const R = 3443.92; // Radius of the earth in NM
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distance in NM
+  }
+
+  function findAirportsWithinDistance(airport, distance) {
+    let airportsInRange = [];
+    for (let i = 0; i < airports.length; i++) {
+      if (getDistanceFromLatLonInNM2(airport, airports[i]) < distance) {
+        airportsInRange.push(airports[i]);
+      }
+    }
+    console.log(airportsInRange.length);
+  }
+
 
   useEffect(() => {
     if (departureAirport.length !== 0 &&
       destinationAirport.length !== 0 &&
       departureValue.length === 4 &&
       destinationValue.length === 4) {
-      setDistance(getDistanceFromLatLonInKm(departureAirport, destinationAirport).toFixed(0));
+      findAirportsWithinDistance(departureAirport, 400);
+      setDistance(getDistanceFromLatLonInNM(departureAirport, destinationAirport).toFixed(0));
+    }
+    if (departureAirport.length === 0 || destinationAirport.length === 0) {
+      setDistance(0);
     }
   }, [departureAirport, destinationAirport]);
+
 
   return <SafeAreaView style={styles.container}>
     <View style={styles.inputContainer}>
@@ -55,9 +91,9 @@ const SearchBar = () => {
         onChangeText={text => setDepartureValue(text)}
       >
       </TextInput>
-      <Text style={styles.distanceText}>{distance} NM</Text>
+      <AnimatedNumber value={distance} time={50} style={styles.distanceText} />
       <TextInput
-        placeholder={"DEST"}
+        placeholder={"DST"}
         style={styles.inputText}
         autoCapitalize={"characters"}
         maxLength={4}
@@ -73,40 +109,39 @@ const SearchBar = () => {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 0.06,
+    flex: 0.07,
+    minHeight: 60,
+    justifyContent: "center",
+    borderColor: 'lightblue',
+    borderWidth: 1,
   },
   inputContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingLeft: 20,
-    paddingRight: 20,
+    paddingLeft: 50,
+    paddingRight: 50,
   },
   inputText: {
-    flex: 0.2,
+    flex: 0.25,
     height: 30,
     fontSize: 20,
+    textAlign: 'center',
     padding: 5,
     borderWidth: 1,
     borderRadius: 5,
-    borderColor: "gray",
+    borderColor: 'lightblue',
   },
   distanceText: {
-    flex: 0.3,
+    width: 100,
     textAlign: "center",
     fontSize: 16,
-
+    paddingLeft: 5,
+    paddingRight: 5,
+    borderWidth:1,
+    borderRadius: 5,
+    borderColor: 'lightblue'
   },
-  button: {
-    flex: 1,
-    height: 30,
-    fontSize: 16,
-    borderWidth: 1,
-    borderRadius: 15,
-    borderColor: "gray",
-
-  },
-
 });
 
 export default SearchBar;
