@@ -11,18 +11,18 @@ const SearchBar = () => {
   const [distance, setDistance] = useState(0);
   const [closestAirports, setClosestAirports] = useState([]);
 
-  const departureAirport = airports.filter(airports => airports.codeIcaoAirport === departureValue);
-  const destinationAirport = airports.filter(airports => airports.codeIcaoAirport === destinationValue);
+  const departureAirport = airports.filter(airports => airports.ident === departureValue)[0];
+  const destinationAirport = airports.filter(airports => airports.ident === destinationValue)[0];
 
-  function getDistanceFromLatLonInNM(airport1, airport2) {
+  function getDistanceBetweenAirports(airport1, airport2) {
     function deg2rad(deg) {
       return deg * (Math.PI / 180);
     }
 
-    const lat1 = airport1[0].latitudeAirport;
-    const lon1 = airport1[0].longitudeAirport;
-    const lat2 = airport2[0].latitudeAirport;
-    const lon2 = airport2[0].longitudeAirport;
+    const lat1 = airport1.latitude_deg;
+    const lon1 = airport1.longitude_deg;
+    const lat2 = airport2.latitude_deg;
+    const lon2 = airport2.longitude_deg;
 
     const R = 3443.92; // Radius of the earth in NM
     const dLat = deg2rad(lat2 - lat1);
@@ -35,60 +35,34 @@ const SearchBar = () => {
     return R * c; // Distance in NM
   }
 
-  function findAirportsWithinDistance(airport, distance) {
-    function getDistanceFromLatLonInNM2(airport1, airport2) {
-      function deg2rad(deg) {
-        return deg * (Math.PI / 180);
-      }
-
-      const lat1 = airport1[0].latitudeAirport;
-      const lon1 = airport1[0].longitudeAirport;
-      const lat2 = airport2.latitudeAirport;
-      const lon2 = airport2.longitudeAirport;
-
-      const R = 3443.92; // Radius of the earth in NM
-      const dLat = deg2rad(lat2 - lat1);
-      const dLon = deg2rad(lon2 - lon1);
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c; // Distance in NM
-    }
-
-    let airportsInRange = [];
+  function findClosestAirports(airport, distance) {
     for (let i = 0; i < airports.length; i++) {
-      if (getDistanceFromLatLonInNM2(airport, airports[i]) < distance) {
-        airportsInRange.push(airports[i]);
+      let tempAirport = airports[i];
+      if (airport && getDistanceBetweenAirports(airport, airports[i]) < distance) {
+        console.log(tempAirport.ident);
+        setClosestAirports([...closestAirports, tempAirport]);
       }
-      setClosestAirports(...closestAirports,...[airportsInRange]);
     }
-
   }
 
 
+  /*Distance between airports*/
   useEffect(() => {
-    if (departureAirport.length !== 0 &&
-      destinationAirport.length !== 0 &&
-      departureValue.length === 4 &&
-      destinationValue.length === 4) {
-      setDistance(getDistanceFromLatLonInNM(departureAirport, destinationAirport).toFixed(0));
+    if (departureAirport && destinationAirport) {
+      setDistance(getDistanceBetweenAirports(departureAirport, destinationAirport));
     }
-    if (departureAirport.length === 0 || destinationAirport.length === 0) {
+    if (!departureAirport || !destinationAirport) {
       setDistance(0);
     }
-  }, [departureAirport, destinationAirport]);
+  }, [destinationAirport, destinationAirport]);
 
   useEffect(() => {
-    if (distance !== 0) {
-      findAirportsWithinDistance(departureAirport, 200);
-    }
-  }, [distance]);
-
-  useEffect(()=>{
+    findClosestAirports(departureAirport, 60);
     console.log(closestAirports);
-  },[closestAirports])
+  }, [departureAirport]);
+
+
+
 
   return <SafeAreaView style={styles.container}>
     <View style={styles.inputContainer}>
@@ -130,8 +104,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingLeft: 50,
-    paddingRight: 50,
+    paddingLeft: 20,
+    paddingRight: 20,
   },
   inputText: {
     width: "30%",
