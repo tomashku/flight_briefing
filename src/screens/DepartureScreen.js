@@ -3,19 +3,20 @@ import { StyleSheet, FlatList, Text, View } from "react-native";
 
 const DepartureScreen = ({ closestDepartureAirports }) => {
 
-  console.log(closestDepartureAirports);
+  const airport = ({ item }) => <View style={styles.item}>
+    <Text style={styles.gpsCode}>{item.gps_code}</Text>
+    <Text>{item.distance === 0 ? '' : item.distance.toFixed(0)} {item.distance === 0 ? '' : "NM"}</Text>
+    <Text>{item.bearing === 0 ? '' : item.bearing.toFixed(0)}{item.bearing === 0 ? '' :"º"}</Text>
+  </View>;
 
   return <FlatList
-      data={closestDepartureAirports}
-      keyExtractor={item=>item.ident}
-      renderItem={({item})=><View style={styles.item}><Text>{item.ident}</Text></View>}
-    />
+    data={closestDepartureAirports}
+    keyExtractor={item => item.ident}
+    renderItem={airport}
+  />;
 };
 
 const styles = StyleSheet.create({
-  textStyle: {
-    fontSize: 30,
-  },
   alignment: {
     flex: 1,
     marginTop: 20,
@@ -23,14 +24,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   item: {
-    width: '100%',
+    width: "100%",
     height: 80,
-    borderWidth: 1,
-    borderColor: 'lightgray',
+    borderBottomWidth: 1,
+    borderTopWidth: 1,
+    borderColor: "lightgray",
     margin: 5,
-    padding: 5
+    padding: 5,
 
   },
+  gpsCode: {
+    fontSize: 18,
+    fontWeight: 'bold'
+  }
 });
 
 export default DepartureScreen;

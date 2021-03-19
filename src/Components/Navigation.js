@@ -9,7 +9,7 @@ import DestinationScreen from "../screens/DestinationScreen";
 
 const Tab = createBottomTabNavigator();
 
-function Navigation({closestDepartureAirports, closestDestinationAirports}) {
+function Navigation({closestDepartureAirports, closestDestinationAirports, routeAlternates}) {
 
   return (
     <NavigationContainer>
@@ -23,7 +23,7 @@ function Navigation({closestDepartureAirports, closestDestinationAirports}) {
         }}
       >
         <Tab.Screen name="Dep" children={()=> <DepartureScreen closestDepartureAirports={closestDepartureAirports} />}/>
-        <Tab.Screen name="Rte" component={RouteScreen} />
+        <Tab.Screen name="Rte" children={()=> <RouteScreen routeAlternates={routeAlternates} />}/>
         <Tab.Screen name="Dst" children={()=> <DestinationScreen closestDestinationAirports={closestDestinationAirports} />}/>
       </Tab.Navigator>
     </NavigationContainer>

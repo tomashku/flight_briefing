@@ -1,143 +1,219 @@
 import React, { useState, useEffect } from "react";
-import { SafeAreaView, TextInput, StyleSheet, View, Keyboard } from "react-native";
+import { SafeAreaView, TextInput, StyleSheet, View, Text } from "react-native";
 import airports from "../../data/airports.json";
 import AnimatedNumber from "react-native-animated-number";
 import Navigation from "./Navigation";
+import { getDistanceFromLine } from "geolib";
 
+const geolib = require("geolib");
 
 const SearchBar = () => {
 
-  const offTrackDistance = 80;
+    const offTrackDistance = 150;
 
-  const [departureInputValue, setDepartureValue] = useState();
-  const [destinationInputValue, setDestinationValue] = useState();
+    const [departureInputValue, setDepartureValue] = useState();
+    const [destinationInputValue, setDestinationValue] = useState();
 
-  const [departureAirport, setDepartureAirport] = useState();
-  const [destinationAirport, setDestinationAirport] = useState();
+    const [departureAirport, setDepartureAirport] = useState();
+    const [destinationAirport, setDestinationAirport] = useState();
 
-  const [distance, setDistance] = useState(0);
+    const [distance, setDistance] = useState(0);
+    const [bearing, setBearing] = useState(0);
 
-  const [closestDepartureAirports, setClosestDepartureAirports] = useState([]);
-  const [closestDestinationAirports, setClosestDestinationAirports] = useState([]);
+    const [closestDepartureAirports, setClosestDepartureAirports] = useState([]);
+    const [closestDestinationAirports, setClosestDestinationAirports] = useState([]);
+    const [routeAlternates, setRouteAlternates] = useState([]);
 
-  function getDistanceBetweenAirports(airport1, airport2) {
-    function deg2rad(deg) {
-      return deg * (Math.PI / 180);
+    function getDistanceBetweenAirports(airport1, airport2) {
+      return geolib.getPreciseDistance({ latitude: airport1.latitude_deg, longitude: airport1.longitude_deg },
+        { latitude: airport2.latitude_deg, longitude: airport2.longitude_deg }) * 0.000539957;
     }
 
-    const lat1 = airport1.latitude_deg;
-    const lon1 = airport1.longitude_deg;
-    const lat2 = airport2.latitude_deg;
-    const lon2 = airport2.longitude_deg;
+    function getDistanceBetweenPointAndAirport(point, airport) {
+      return geolib.getPreciseDistance({ latitude: point.latitude_deg, longitude: point.longitude_deg },
+        { latitude: airport.latitude_deg, longitude: airport.longitude_deg }) * 0.000539957;
+    }
 
-    const R = 3443.92; // Radius of the earth in NM
-    const dLat = deg2rad(lat2 - lat1);
-    const dLon = deg2rad(lon2 - lon1);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c; // Distance in NM
-  }
+    function getBearingBetweenPointAndAirport(point, airport) {
+      return geolib.getGreatCircleBearing({ latitude: point.latitude_deg, longitude: point.longitude_deg },
+        { latitude: airport.latitude_deg, longitude: airport.longitude_deg });
+    }
 
-  function findClosestDepartureAirports(airport, distance) {
-    let airportsArray = [];
-    for (let i = 0; i < airports.length; i++) {
-      let tempAirport = airports[i];
-      if (departureAirport && getDistanceBetweenAirports(airport, tempAirport) < distance &&
-        tempAirport.scheduled_service === "yes" &&
-        (tempAirport.type === "medium_airport" ||
-          tempAirport.type === "large_airport"
-        )) {
-        airportsArray.push(tempAirport);
+    function getBearingBetweenAirports(airport1, airport2) {
+      return geolib.getGreatCircleBearing({ latitude: airport1.latitude_deg, longitude: airport1.longitude_deg },
+        { latitude: airport2.latitude_deg, longitude: airport2.longitude_deg });
+    }
+
+    function findClosestAirports(refAirport, distance) {
+      const myAirports = [];
+      for (let i = 0; i < airports.length; i++) {
+        myAirports[i] = {};
+        myAirports[i].id = airports[i].id;
+        myAirports[i].type = airports[i].type;
+        myAirports[i].name = airports[i].name;
+        myAirports[i].latitude_deg = airports[i].latitude_deg;
+        myAirports[i].longitude_deg = airports[i].longitude_deg;
+        myAirports[i].elevation_ft = airports[i].elevation_ft;
+        myAirports[i].scheduled_service = airports[i].scheduled_service;
+        myAirports[i].gps_code = airports[i].gps_code;
+        myAirports[i].iata_code = airports[i].iata_code;
+        myAirports[i].id = airports[i].id;
+      } /*Copy of the airports because they reference same object*/
+      const airportsArray = [];
+      for (let i = 0; i < myAirports.length; i++) {
+        const tempAirport = myAirports[i];
+        if (departureAirport && getDistanceBetweenAirports(refAirport, tempAirport) < distance &&
+          tempAirport.scheduled_service === "yes" &&
+          (tempAirport.type === "medium_airport" ||
+            tempAirport.type === "large_airport"
+          )) {
+          tempAirport.distance = getDistanceBetweenAirports(refAirport, tempAirport);
+          tempAirport.bearing = getBearingBetweenAirports(refAirport, tempAirport);
+          airportsArray.push(tempAirport);
+        }
       }
+      airportsArray.sort((a, b) => a.distance - b.distance);
+      return airportsArray;
     }
-    setClosestDepartureAirports(...closestDepartureAirports, airportsArray);
-  }
 
-  function findClosestDestinationAirports(airport, distance) {
+    function getRouteAlternates(dep, dest) {
+      const myAirports = [];
+      for (let i = 0; i < airports.length; i++) {
+        myAirports[i] = {};
+        myAirports[i].id = airports[i].id;
+        myAirports[i].type = airports[i].type;
+        myAirports[i].name = airports[i].name;
+        myAirports[i].latitude_deg = airports[i].latitude_deg;
+        myAirports[i].longitude_deg = airports[i].longitude_deg;
+        myAirports[i].elevation_ft = airports[i].elevation_ft;
+        myAirports[i].scheduled_service = airports[i].scheduled_service;
+        myAirports[i].gps_code = airports[i].gps_code;
+        myAirports[i].iata_code = airports[i].iata_code;
+        myAirports[i].id = airports[i].id;
+      }/*Copy of the airports because they reference same object*/
 
-    let airportsArray = [];
-    for (let i = 0; i < airports.length; i++) {
-      let tempAirport = airports[i];
-      if (destinationAirport && getDistanceBetweenAirports(airport, tempAirport) < distance &&
-        tempAirport.scheduled_service === "yes" &&
-        (tempAirport.type === "medium_airport" ||
-          tempAirport.type === "large_airport"
-        )) {
-        airportsArray.push(tempAirport);
+      const routeAlternates = [];
+      for (let i = 0; i < myAirports.length; i++) {
+        const tempAirport = myAirports[i];
+        if (departureAirport && departureAirport &&
+          tempAirport.scheduled_service === "yes" &&
+          (tempAirport.type === "medium_airport" || tempAirport.type === "large_airport")) {
+          if (getDistanceFromLine(
+            { latitude: tempAirport.latitude_deg, longitude: tempAirport.longitude_deg },
+            { latitude: dep.latitude_deg, longitude: dep.longitude_deg },
+            { latitude: dest.latitude_deg, longitude: dest.longitude_deg },
+          ) * 0.000539957 < offTrackDistance) {
+            myAirports[i].offTrackDistance = getDistanceFromLine(
+              { latitude: tempAirport.latitude_deg, longitude: tempAirport.longitude_deg },
+              { latitude: dep.latitude_deg, longitude: dep.longitude_deg },
+              { latitude: dest.latitude_deg, longitude: dest.longitude_deg },
+            ) * 0.000539957;
+            myAirports[i].distanceFromOrgin = getDistanceBetweenAirports(tempAirport, departureAirport);
+            routeAlternates.push(tempAirport);
+          }
+        }
       }
+      routeAlternates.sort((a, b) => a.distanceFromOrgin - b.distanceFromOrgin);
+      return routeAlternates;
     }
-    setClosestDestinationAirports(...closestDestinationAirports, airportsArray);
+
+    /* Set Departure and Destination Airports*/
+    useEffect(() => {
+
+      if (typeof departureInputValue !== "undefined" && departureInputValue.length === 4) {
+        setDepartureAirport(airports.filter(airports => airports.ident === departureInputValue)[0]);
+      } else {
+        setDepartureAirport();
+      }
+    }, [departureInputValue]);
+    useEffect(() => {
+      if (typeof departureInputValue !== "undefined" && departureInputValue.length === 4) {
+        setDestinationAirport(airports.filter(airports => airports.ident === destinationInputValue)[0]);
+      } else {
+        setDestinationAirport();
+      }
+    }, [destinationInputValue]);
+    /*Distance & Bearing between airports*/
+    useEffect(() => {
+      if (departureAirport && destinationAirport) {
+        setDistance(getDistanceBetweenAirports(departureAirport, destinationAirport));
+        setBearing(getBearingBetweenAirports(departureAirport, destinationAirport));
+      }
+      if (!departureAirport || !destinationAirport) {
+        setDistance(0);
+        setBearing(0);
+      }
+    }, [destinationAirport, destinationAirport]);
+    /*Find closest Departure Airports*/
+    useEffect(() => {
+      if (departureAirport) {
+        setClosestDepartureAirports(findClosestAirports(departureAirport, offTrackDistance));
+      } else {
+        setClosestDepartureAirports([]);
+      }
+
+    }, [departureAirport]);
+    /*Find closest Destination Airports*/
+    useEffect(() => {
+      if (destinationAirport) {
+        setClosestDestinationAirports(findClosestAirports(destinationAirport, offTrackDistance));
+      } else {
+        setClosestDestinationAirports([]);
+      }
+    }, [destinationAirport]);
+
+    useEffect(() => {
+      if (distance) {
+        setRouteAlternates(getRouteAlternates(departureAirport, destinationAirport));
+      } else {
+        setRouteAlternates([]);
+      }
+
+    }, [distance]);
+
+    return (
+      <SafeAreaView style={styles.screen}>
+        <View style={styles.inputContainer}>
+          <TextInput
+            placeholder={"DEP"}
+            style={styles.inputText}
+            autoCapitalize={"characters"}
+            maxLength={4}
+            autoCorrect={false}
+            value={departureInputValue}
+            onChangeText={text => setDepartureValue(text)}
+            autoFocus={true}
+          >
+          </TextInput>
+
+          <View style={styles.distanceBearing}>
+            <AnimatedNumber value={bearing.toFixed(0)} time={50} />
+            <Text>&deg; </Text>
+            <AnimatedNumber value={distance.toFixed(0)} time={50} />
+            <Text> NM</Text>
+          </View>
+
+          <TextInput
+            placeholder={"DST"}
+            style={styles.inputText}
+            autoCapitalize={"characters"}
+            maxLength={4}
+            autoCorrect={false}
+            value={destinationInputValue}
+            onChangeText={text => setDestinationValue(text)}
+            autoFocus={true}
+          >
+          </TextInput>
+        </View>
+        <Navigation closestDepartureAirports={closestDepartureAirports}
+                    closestDestinationAirports={closestDestinationAirports}
+                    routeAlternates={routeAlternates}
+        />
+
+      </SafeAreaView>
+    );
   }
-
-  /* Set Departure and Destination Airports*/
-  useEffect(() => {
-    setDepartureAirport(airports.filter(airports => airports.ident === departureInputValue)[0]);
-    setDestinationAirport(airports.filter(airports => airports.ident === destinationInputValue)[0]);
-  }, [departureInputValue, destinationInputValue]);
-
-  /*Distance between airports*/
-  useEffect(() => {
-    if (departureAirport && destinationAirport &&
-      departureInputValue.length === 4) {
-      setDistance(getDistanceBetweenAirports(departureAirport, destinationAirport));
-    }
-    if (!departureAirport || !destinationAirport) {
-      setDistance(0);
-    }
-  }, [destinationAirport, destinationAirport]);
-
-  useEffect(()=>{
-    if (departureAirport) {
-      findClosestDepartureAirports(departureAirport, offTrackDistance)
-    } else {
-      setClosestDepartureAirports([]);
-    }
-  },[departureAirport])
-
-  useEffect(()=>{
-    if (destinationAirport) {
-      findClosestDestinationAirports(destinationAirport, offTrackDistance)
-    } else {
-      setClosestDestinationAirports([]);
-    }
-  },[destinationAirport])
-
-
-
-  return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.inputContainer}>
-        <TextInput
-          placeholder={"DEP"}
-          style={styles.inputText}
-          autoCapitalize={"characters"}
-          maxLength={4}
-          autoCorrect={false}
-          value={departureInputValue}
-          onChangeText={text => setDepartureValue(text)}
-          autoFocus={true}
-        >
-        </TextInput>
-        <AnimatedNumber value={distance.toFixed(0)} time={50} style={styles.distanceText} />
-        <TextInput
-          placeholder={"DST"}
-          style={styles.inputText}
-          autoCapitalize={"characters"}
-          maxLength={4}
-          autoCorrect={false}
-          value={destinationInputValue}
-          onChangeText={text => setDestinationValue(text)}
-          autoFocus={true}
-        >
-        </TextInput>
-      </View>
-      <Navigation closestDepartureAirports={closestDepartureAirports} closestDestinationAirports={closestDestinationAirports}/>
-    </SafeAreaView>
-  );
-};
+;
 
 
 const styles = StyleSheet.create({
@@ -147,7 +223,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   inputContainer: {
-    height: "10%",
+    height: 50,
     borderBottomColor: "lightblue",
     borderBottomWidth: 1,
     flexDirection: "row",
@@ -169,12 +245,12 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     borderColor: "lightblue",
   },
-  distanceText: {
+  distanceBearing: {
+    flexDirection: "row",
     textAlign: "center",
-    fontSize: 16,
+    fontSize: 24,
     paddingLeft: 5,
     paddingRight: 5,
-    // borderWidth: 1,
     borderRadius: 5,
     borderColor: "lightblue",
   },
