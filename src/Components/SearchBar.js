@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { SafeAreaView, TextInput, StyleSheet, View, Text } from "react-native";
 import airports from "../../data/airports.json";
+import runways from "../../data/runways.json";
 import AnimatedNumber from "react-native-animated-number";
 import Navigation from "./Navigation";
 import { getDistanceFromLine } from "geolib";
+import MapSelector from "./MapSelector";
 
 const geolib = require("geolib");
 
 const SearchBar = () => {
 
-    const offTrackDistance = 150;
+    const offTrackDistance = 400;
+    // const lda = 6000;
+
+    const [ldr, setLdr] = useState(500);
 
     const [departureInputValue, setDepartureValue] = useState();
     const [destinationInputValue, setDestinationValue] = useState();
@@ -59,7 +64,8 @@ const SearchBar = () => {
         myAirports[i].iata_code = airports[i].iata_code;
         myAirports[i].id = airports[i].id;
       } /*Copy of the airports because they reference same object*/
-      const airportsArray = [];
+
+      let airportsArray = [];
       for (let i = 0; i < myAirports.length; i++) {
         const tempAirport = myAirports[i];
         if (departureAirport && getDistanceBetweenAirports(refAirport, tempAirport) < distance &&
@@ -72,6 +78,16 @@ const SearchBar = () => {
           airportsArray.push(tempAirport);
         }
       }
+      for (let k = 0; k < airportsArray.length; k++) {
+        const lookup = {};
+        let runwayIdToFind = airportsArray[k].id;
+        runways.forEach(runway => lookup[runway.airport_ref] = runway);
+        if (typeof lookup[runwayIdToFind] !== "undefined") {
+          airportsArray[k].runways = lookup[runwayIdToFind];
+        }
+      }/*Dep and Dest airport are being filtered which is not good*/
+      airportsArray = airportsArray.filter(airport => typeof airport.runways !== "undefined"); /*Discard airports without the runways*/
+      airportsArray = airportsArray.filter(airport => airport.runways.length_ft > ldr * 3.28084); /*Filter by LDA in feet*/
       airportsArray.sort((a, b) => a.distance - b.distance);
       return airportsArray;
     }
@@ -92,27 +108,42 @@ const SearchBar = () => {
         myAirports[i].id = airports[i].id;
       }/*Copy of the airports because they reference same object*/
 
-      const routeAlternates = [];
+
+      let routeAlternates = [];
       for (let i = 0; i < myAirports.length; i++) {
         const tempAirport = myAirports[i];
         if (departureAirport && departureAirport &&
           tempAirport.scheduled_service === "yes" &&
-          (tempAirport.type === "medium_airport" || tempAirport.type === "large_airport")) {
-          if (getDistanceFromLine(
+          getDistanceBetweenAirports(tempAirport, dest) <= distance && /*avoids using apts which are in the oposit direction*/
+          getDistanceBetweenAirports(tempAirport, dep) <= distance && /*avoids using apts which are beyond the dest*/
+          getDistanceBetweenAirports(tempAirport, dest) !== 0 && /*removes the dest airport from list*/
+          (tempAirport.type === "medium_airport" || tempAirport.type === "large_airport") &&
+
+          (getDistanceFromLine(
             { latitude: tempAirport.latitude_deg, longitude: tempAirport.longitude_deg },
             { latitude: dep.latitude_deg, longitude: dep.longitude_deg },
             { latitude: dest.latitude_deg, longitude: dest.longitude_deg },
-          ) * 0.000539957 < offTrackDistance) {
-            myAirports[i].offTrackDistance = getDistanceFromLine(
-              { latitude: tempAirport.latitude_deg, longitude: tempAirport.longitude_deg },
-              { latitude: dep.latitude_deg, longitude: dep.longitude_deg },
-              { latitude: dest.latitude_deg, longitude: dest.longitude_deg },
-            ) * 0.000539957;
-            myAirports[i].distanceFromOrgin = getDistanceBetweenAirports(tempAirport, departureAirport);
-            routeAlternates.push(tempAirport);
-          }
+          ) * 0.000539957 < offTrackDistance)) {
+          myAirports[i].offTrackDistance = getDistanceFromLine(
+            { latitude: tempAirport.latitude_deg, longitude: tempAirport.longitude_deg },
+            { latitude: dep.latitude_deg, longitude: dep.longitude_deg },
+            { latitude: dest.latitude_deg, longitude: dest.longitude_deg },
+          ) * 0.000539957;
+          tempAirport.distanceFromOrgin = getDistanceBetweenAirports(tempAirport, departureAirport);
+          routeAlternates.push(tempAirport);
         }
       }
+
+      for (let k = 0; k < routeAlternates.length; k++) {
+        const lookup = {};
+        let runwayToFind = routeAlternates[k].id;
+        runways.forEach(runway => lookup[runway.airport_ref] = runway);
+        if (typeof lookup[runwayToFind] !== "undefined") {
+          routeAlternates[k].runways = lookup[runwayToFind];
+        }
+      }
+      routeAlternates = routeAlternates.filter(alternate => typeof alternate.runways !== "undefined"); /*Discard airports without the runways*/
+      routeAlternates = routeAlternates.filter(alternate => alternate.runways.length_ft > ldr * 3.28084); /*Filter by LDA in feet*/
       routeAlternates.sort((a, b) => a.distanceFromOrgin - b.distanceFromOrgin);
       return routeAlternates;
     }
@@ -169,7 +200,7 @@ const SearchBar = () => {
         setRouteAlternates([]);
       }
 
-    }, [distance]);
+    }, [distance,ldr]);
 
     return (
       <SafeAreaView style={styles.screen}>
@@ -187,9 +218,9 @@ const SearchBar = () => {
           </TextInput>
 
           <View style={styles.distanceBearing}>
-            <AnimatedNumber value={bearing.toFixed(0)} time={50} />
+            <AnimatedNumber value={bearing.toFixed(0)} time={30} />
             <Text>&deg; </Text>
-            <AnimatedNumber value={distance.toFixed(0)} time={50} />
+            <AnimatedNumber value={distance.toFixed(0)} time={30} />
             <Text> NM</Text>
           </View>
 
@@ -208,13 +239,14 @@ const SearchBar = () => {
         <Navigation closestDepartureAirports={closestDepartureAirports}
                     closestDestinationAirports={closestDestinationAirports}
                     routeAlternates={routeAlternates}
+                    ldr={ldr}
+                    setLdr={setLdr}
         />
-
       </SafeAreaView>
+
     );
   }
 ;
-
 
 const styles = StyleSheet.create({
   screen: {
@@ -224,7 +256,7 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     height: 50,
-    borderBottomColor: "lightblue",
+    borderBottomColor: "grey",
     borderBottomWidth: 1,
     flexDirection: "row",
     justifyContent: "space-between",
@@ -236,18 +268,19 @@ const styles = StyleSheet.create({
     height: "90%",
   },
   inputText: {
-    width: "30%",
+    width: "33%",
     height: 30,
     fontSize: 20,
     textAlign: "center",
     padding: 5,
     borderWidth: 1,
     borderRadius: 5,
-    borderColor: "lightblue",
+    borderColor: "grey",
   },
   distanceBearing: {
     flexDirection: "row",
     textAlign: "center",
+
     fontSize: 24,
     paddingLeft: 5,
     paddingRight: 5,
